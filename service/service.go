@@ -129,7 +129,6 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
 			err = s.ForwardUDPData(udpListener, dstIP, cliPort)
 			if err != nil {
-				log.Printf("Handling UDP connection failed: %s", err.Error())
 				return &net.TCPAddr{}, err
 			} else {
 				return &net.TCPAddr{}, errors.New("Finish UDP connection.")
@@ -172,7 +171,7 @@ func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort
 		}
 		if readCount > 0 {
 			if buf[2] != 0x00 {
-				/* Discard fragment udp data package */
+				/* Discard fragment udp data package. */
 				return errors.New("Discard fragment udp data package.")
 			}
 
