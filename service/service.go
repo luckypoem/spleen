@@ -127,7 +127,7 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 			}
 
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
-			err = s.ForwardUDPData(udpListener, dstIP, cliPort)
+			err = s.HandleUDPData(udpListener, dstIP, cliPort)
 			if err != nil {
 				return &net.TCPAddr{}, err
 			} else {
@@ -161,7 +161,7 @@ func (s *Service) ForwardTCPData(srcConn *net.TCPConn, dstConn *net.TCPConn) err
 	}
 }
 
-func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort int) error {
+func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort int) error {
 	for {
 		buf := make([]byte, UDPBUFFERSIZE)
 		readCount, remoteAddr, err := udpListener.ReadFromUDP(buf)
@@ -172,7 +172,7 @@ func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort
 		if readCount > 0 {
 			if buf[2] != 0x00 {
 				/* Discard fragment udp data package. */
-				return errors.New("Discard fragment udp data package.")
+				return errors.New("Discard fragment UDP data garam.")
 			}
 
 			var dstIP []byte
@@ -215,16 +215,12 @@ func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort
 				/* TODO verify writeCount */
 				_, err = conn.Write(buf[dataIndex:readCount])
 				if err != nil {
-					return errors.New("Write UDP data gram failed.")
+					return errors.New("Write UDP data garam failed.")
 				}
-				log.Printf("Server send the UDP data gram to %s:%d success", dstAddr.IP.String(), dstAddr.Port)
+				log.Printf("Server send the UDP data garam to %s:%d successed.", dstAddr.IP.String(), dstAddr.Port)
 
 				resp := make([]byte, UDPBUFFERSIZE)
-				readCount, err = conn.Read(resp)
-				if err != nil {
-					log.Printf(err.Error())
-					return errors.New("Read UDP data gram failed: " + err.Error())
-				}
+				readCount, _ = conn.Read(resp)
 
 				/* TODO: verify writeCount */
 				var respContent bytes.Buffer
