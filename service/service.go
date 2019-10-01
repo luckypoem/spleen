@@ -44,7 +44,7 @@ func IPString2Long(ip string) (uint, error) {
 	return uint(b[3]) | uint(b[2])<<8 | uint(b[1])<<16 | uint(b[0])<<24, nil
 }
 
-func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
+func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool) {
 	buf := make([]byte, BUFFERSIZE)
 
 	readCount, errRead := s.TCPRead(userConn, buf)
@@ -52,12 +52,12 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 	if readCount > 0 && errRead == nil {
 		if buf[0] != 0x05 {
 			/* Version Number */
-			return &net.TCPAddr{}, errors.New("Only Support SOCKS5.")
+			return &net.TCPAddr{}, errors.New("Only Support SOCKS5."), false
 		} else {
 			/* [SOCKS5, NO AUTHENTICATION REQUIRED]  */
 			errWrite := s.TCPWrite(userConn, []byte{0x05, 0x00}, 2)
 			if errWrite != nil {
-				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the first stage.")
+				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the first stage."), false
 			}
 		}
 	}
@@ -66,7 +66,7 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 	if readCount > 0 && errRead == nil {
 		if buf[1] != 0x01 && buf[1] != 0x03 {
 			/* Only support CONNECT and UDP ASSOCIATE */
-			return &net.TCPAddr{}, errors.New("Only support CONNECT and UDP ASSOCIATE method.")
+			return &net.TCPAddr{}, errors.New("Only support CONNECT and UDP ASSOCIATE method."), false
 		}
 
 		var dstIP []byte
@@ -76,13 +76,13 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 		case 0x03: /* DOMAINNAME */
 			ipAddr, err := net.ResolveIPAddr("ip", string(buf[5:readCount-2]))
 			if err != nil {
-				return &net.TCPAddr{}, errors.New("Parse IP failed")
+				return &net.TCPAddr{}, errors.New("Parse IP failed"), false
 			}
 			dstIP = ipAddr.IP
 		case 0x04: /* IPV6 */
 			dstIP = buf[4 : 4+net.IPv6len]
 		default:
-			return &net.TCPAddr{}, errors.New("Wrong DST.ADDR and DST.PORT")
+			return &net.TCPAddr{}, errors.New("Wrong DST.ADDR and DST.PORT"), false
 		}
 		dstPort := buf[readCount-2 : readCount]
 
@@ -92,7 +92,7 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 				IP:   dstIP,
 				Port: int(binary.BigEndian.Uint16(dstPort)),
 			}
-			return dstAddr, errRead
+			return dstAddr, errRead, false
 		} else if buf[1] == 0x03 {
 			/* UDP over SOCKS5 */
 			header := []byte{0x05, 0x00, 0x00, 0x01}
@@ -123,22 +123,19 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 			/* [SOCKS5, succeeded, RSV, ATYP, BND.ADDR, BND.PORT] */
 			err := s.TCPWrite(userConn, respContent.Bytes(), len(respContent.Bytes()))
 			if err != nil {
-				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the UDP stage.")
+				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the UDP stage."), false
 			}
 
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
-			err = s.HandleUDPData(udpListener, dstIP, cliPort)
-			if err != nil {
-				return &net.TCPAddr{}, err
-			} else {
-				return &net.TCPAddr{}, errors.New("Finish UDP connection.")
-			}
+			go s.HandleUDPData(udpListener, dstIP, cliPort)
+			return &net.TCPAddr{}, nil, true
+
 		} else {
 			log.Println("Only support CONNECT and UDP ASSOCIATE method.")
-			return &net.TCPAddr{}, errRead
+			return &net.TCPAddr{}, errRead, false
 		}
 	}
-	return &net.TCPAddr{}, errRead
+	return &net.TCPAddr{}, errRead, false
 }
 
 func (s *Service) ForwardTCPData(srcConn *net.TCPConn, dstConn *net.TCPConn) error {

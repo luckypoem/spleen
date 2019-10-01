@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"log"
 	"net"
 
@@ -46,10 +47,18 @@ func (s *server) Listen() error {
 func (s *server) handleTCPConn(userConn *net.TCPConn) {
 	defer userConn.Close()
 
-	dstAddr, errParse := s.ParseSOCKS5(userConn)
-	if errParse != nil {
+isUDP:
+	dstAddr, errParse, isUDP := s.ParseSOCKS5(userConn)
+	if errParse == io.EOF {
+		log.Printf("Connection closed.")
+		return
+	}
+	if errParse != nil{
 		log.Printf("%s", errParse.Error())
 		return
+	}
+	if isUDP {
+		goto isUDP
 	}
 
 	/* Server should direct connect to the destination address. */
