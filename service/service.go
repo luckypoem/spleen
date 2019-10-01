@@ -48,7 +48,9 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 	buf := make([]byte, BUFFERSIZE)
 
 	readCount, errRead := s.TCPRead(userConn, buf)
-
+	if errRead == io.EOF {
+		return &net.TCPAddr{}, errRead, false
+	}
 	if readCount > 0 && errRead == nil {
 		if buf[0] != 0x05 {
 			/* Version Number */
@@ -63,6 +65,9 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 	}
 
 	readCount, errRead = s.TCPRead(userConn, buf)
+	if errRead == io.EOF {
+		return &net.TCPAddr{}, errRead, false
+	}
 	if readCount > 0 && errRead == nil {
 		if buf[1] != 0x01 && buf[1] != 0x03 {
 			/* Only support CONNECT and UDP ASSOCIATE */
@@ -163,7 +168,7 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 		buf := make([]byte, UDPBUFFERSIZE)
 		readCount, remoteAddr, err := udpListener.ReadFromUDP(buf)
 		if err != nil {
-			log.Printf("Read data over UDP failed.")
+			log.Printf("Read UDP data graram failed.")
 			return err
 		}
 		if readCount > 0 {
@@ -204,11 +209,11 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				dstAddr := &net.UDPAddr{IP: dstIP, Port: int(binary.BigEndian.Uint16(dstPort))}
 				conn, err := net.DialUDP("udp", srcAddr, dstAddr)
 				if err != nil {
-					return errors.New("Dial UDP failed.")
+					return errors.New("Connect the destination server over UDP failed.")
 				}
 				defer conn.Close()
 
-				/* Server forward UDP data gram to the destination address*/
+				/* Server forward UDP data gram to the destination address. */
 				/* TODO verify writeCount */
 				_, err = conn.Write(buf[dataIndex:readCount])
 				if err != nil {
