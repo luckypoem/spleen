@@ -128,7 +128,6 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
 			err = s.ForwardUDPData(udpListener, dstIP, cliPort)
 			if err != nil {
-				log.Printf("Handle UDP failed. %s", err.Error())
 				return &net.TCPAddr{}, err
 			} else {
 				return &net.TCPAddr{}, errors.New("Finish UDP connection.")
@@ -221,7 +220,8 @@ func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort
 				resp := make([]byte, BUFFERSIZE)
 				readCount, err = conn.Read(resp)
 				if err != nil {
-					return errors.New("Read UDP data gram failed.")
+					log.Printf(err.Error())
+					return errors.New("Read UDP data gram failed: " + err.Error())
 				}
 
 				/* TODO: verify writeCount */
