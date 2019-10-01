@@ -12,6 +12,7 @@ import (
 )
 
 const BUFFERSIZE = 1024 * 4
+const UDPBUFFERSIZE = 65536
 
 type Service struct {
 	ServerIP   string
@@ -128,6 +129,7 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
 			err = s.ForwardUDPData(udpListener, dstIP, cliPort)
 			if err != nil {
+				log.Printf("Handling UDP connection failed: %s", err.Error())
 				return &net.TCPAddr{}, err
 			} else {
 				return &net.TCPAddr{}, errors.New("Finish UDP connection.")
@@ -162,7 +164,7 @@ func (s *Service) ForwardTCPData(srcConn *net.TCPConn, dstConn *net.TCPConn) err
 
 func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort int) error {
 	for {
-		buf := make([]byte, BUFFERSIZE)
+		buf := make([]byte, UDPBUFFERSIZE)
 		readCount, remoteAddr, err := udpListener.ReadFromUDP(buf)
 		if err != nil {
 			log.Printf("Read data over UDP failed.")
@@ -216,8 +218,9 @@ func (s *Service) ForwardUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort
 				if err != nil {
 					return errors.New("Write UDP data gram failed.")
 				}
+				log.Printf("Server send the UDP data gram to %s:%d success", dstAddr.IP.String(), dstAddr.Port)
 
-				resp := make([]byte, BUFFERSIZE)
+				resp := make([]byte, UDPBUFFERSIZE)
 				readCount, err = conn.Read(resp)
 				if err != nil {
 					log.Printf(err.Error())
