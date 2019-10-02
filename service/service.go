@@ -1,18 +1,14 @@
 package service
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
 	"log"
-	"math/rand"
-	"net"
-	"strconv"
+  "net"
 )
 
 const BUFFERSIZE = 1024 * 4
-const UDPBUFFERSIZE = 65536
 
 type Service struct {
 	ServerIP   string
@@ -44,34 +40,34 @@ func IPString2Long(ip string) (uint, error) {
 	return uint(b[3]) | uint(b[2])<<8 | uint(b[1])<<16 | uint(b[0])<<24, nil
 }
 
-func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool) {
+func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error) {
 	buf := make([]byte, BUFFERSIZE)
 
 	readCount, errRead := s.TCPRead(userConn, buf)
 	if errRead == io.EOF {
-		return &net.TCPAddr{}, errRead, false
+		return &net.TCPAddr{}, errRead
 	}
 	if readCount > 0 && errRead == nil {
 		if buf[0] != 0x05 {
 			/* Version Number */
-			return &net.TCPAddr{}, errors.New("Only Support SOCKS5."), false
+			return &net.TCPAddr{}, errors.New("Only Support SOCKS5.")
 		} else {
 			/* [SOCKS5, NO AUTHENTICATION REQUIRED]  */
 			errWrite := s.TCPWrite(userConn, []byte{0x05, 0x00}, 2)
 			if errWrite != nil {
-				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the first stage."), false
+				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the first stage.")
 			}
 		}
 	}
 
 	readCount, errRead = s.TCPRead(userConn, buf)
 	if errRead == io.EOF {
-		return &net.TCPAddr{}, errRead, false
+		return &net.TCPAddr{}, errRead
 	}
 	if readCount > 0 && errRead == nil {
-		if buf[1] != 0x01 && buf[1] != 0x03 {
-			/* Only support CONNECT and UDP ASSOCIATE */
-			return &net.TCPAddr{}, errors.New("Only support CONNECT and UDP ASSOCIATE method."), false
+		if buf[1] != 0x01 {
+			/* Only support CONNECT method */
+			return &net.TCPAddr{}, errors.New("Only support CONNECT method.")
 		}
 
 		var dstIP []byte
@@ -81,13 +77,13 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 		case 0x03: /* DOMAINNAME */
 			ipAddr, err := net.ResolveIPAddr("ip", string(buf[5:readCount-2]))
 			if err != nil {
-				return &net.TCPAddr{}, errors.New("Parse IP failed"), false
+				return &net.TCPAddr{}, errors.New("Parse IP failed")
 			}
 			dstIP = ipAddr.IP
 		case 0x04: /* IPV6 */
 			dstIP = buf[4 : 4+net.IPv6len]
 		default:
-			return &net.TCPAddr{}, errors.New("Wrong DST.ADDR and DST.PORT"), false
+			return &net.TCPAddr{}, errors.New("Wrong DST.ADDR and DST.PORT")
 		}
 		dstPort := buf[readCount-2 : readCount]
 
@@ -97,50 +93,13 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 				IP:   dstIP,
 				Port: int(binary.BigEndian.Uint16(dstPort)),
 			}
-			return dstAddr, errRead, false
-		} else if buf[1] == 0x03 {
-			/* UDP over SOCKS5 */
-			header := []byte{0x05, 0x00, 0x00, 0x01}
-			var respContent bytes.Buffer
-			respContent.Write(header)
-			/* Construct IP */
-			uLocalIP, _ := IPString2Long(s.ServerIP)
-			byteLocalIP := make([]byte, 4)
-			binary.BigEndian.PutUint32(byteLocalIP, uint32(uLocalIP))
-			respContent.Write(byteLocalIP)
-			/* Construct Port */
-			var randomPort int
-			var udpListener *net.UDPConn
-			var errListen error
-			for {
-				randomPort = rand.Int() % 1024
-				udpListener, errListen = net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(s.ServerIP), Port: randomPort})
-				if errListen != nil {
-					continue
-				} else {
-					break
-				}
-			}
-			uLocalPort := uint16(randomPort)
-			byteLocalPort := make([]byte, 2)
-			binary.BigEndian.PutUint16(byteLocalPort, uLocalPort)
-			respContent.Write(byteLocalPort)
-			/* [SOCKS5, succeeded, RSV, ATYP, BND.ADDR, BND.PORT] */
-			err := s.TCPWrite(userConn, respContent.Bytes(), len(respContent.Bytes()))
-			if err != nil {
-				return &net.TCPAddr{}, errors.New("Response SOCKS5 failed at the UDP stage."), false
-			}
-
-			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
-			s.HandleUDPData(udpListener, dstIP, cliPort)
-			return &net.TCPAddr{}, nil, true
-
+			return dstAddr, errRead
 		} else {
-			log.Println("Only support CONNECT and UDP ASSOCIATE method.")
-			return &net.TCPAddr{}, errRead, false
+			log.Println("Only support CONNECT method.")
+			return &net.TCPAddr{}, errRead
 		}
 	}
-	return &net.TCPAddr{}, errRead, false
+	return &net.TCPAddr{}, errRead
 }
 
 func (s *Service) ForwardTCPData(srcConn *net.TCPConn, dstConn *net.TCPConn) error {
@@ -158,81 +117,6 @@ func (s *Service) ForwardTCPData(srcConn *net.TCPConn, dstConn *net.TCPConn) err
 			err = s.TCPWrite(dstConn, buf[0:readCount], readCount)
 			if err != nil {
 				return err
-			}
-		}
-	}
-}
-
-func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort int) error {
-	for {
-		buf := make([]byte, UDPBUFFERSIZE)
-		readCount, remoteAddr, err := udpListener.ReadFromUDP(buf)
-		if err != nil {
-			log.Printf("Read UDP datagrams failed.")
-			return err
-		}
-		if readCount > 0 {
-			if buf[2] != 0x00 {
-				/* Discard fragment udp datagrams. */
-				return errors.New("Discard fragment UDP datagrams.")
-			}
-
-			var dstIP []byte
-			dataIndex := 0
-			switch buf[3] { /* verify ATYPE */
-			case 0x01: /* IPv4 */
-				dstIP = buf[4 : 4+net.IPv4len]
-				dataIndex = 4 + net.IPv4len
-			case 0x03: /* DOMAINNAME */
-				domainLen := int(buf[5])
-				ipAddr, err := net.ResolveIPAddr("ip", string(buf[6:6+domainLen]))
-				if err != nil {
-					return errors.New("Parse UDP address failed.")
-				}
-				dstIP = ipAddr.IP
-			case 0x04: /* IPV6 */
-				dstIP = buf[4 : 4+net.IPv6len]
-				dataIndex = 4 + net.IPv6len
-			default:
-				return errors.New("Wrong DST.ADDR and DST.PORT in UDP")
-			}
-
-			dstPort := buf[dataIndex : dataIndex+2]
-			dataIndex += 2
-			/* Verify the source address. */
-			sourceIP := remoteAddr.IP.String()
-			sourcePort := remoteAddr.Port
-
-			if (sourceIP == string(cliIP) && cliPort == sourcePort) ||
-				cliPort == 0 {
-				srcAddr := &net.UDPAddr{IP: net.IPv4zero, Port: 0}
-				dstAddr := &net.UDPAddr{IP: dstIP, Port: int(binary.BigEndian.Uint16(dstPort))}
-				conn, err := net.DialUDP("udp", srcAddr, dstAddr)
-				if err != nil {
-					return errors.New("Connect the destination server over UDP failed.")
-				}
-				defer conn.Close()
-
-				/* Server forward UDP datagrams to the destination address. */
-				/* TODO verify writeCount */
-				_, err = conn.Write(buf[dataIndex:readCount])
-				if err != nil {
-					return errors.New("Write UDP datagrams failed.")
-				}
-				log.Printf("Server send the UDP datagrams to %s:%d successed.", dstAddr.IP.String(), dstAddr.Port)
-
-				resp := make([]byte, UDPBUFFERSIZE)
-				readCount, _ = conn.Read(resp)
-
-				/* TODO: verify writeCount */
-				var respContent bytes.Buffer
-				respContent.Write(buf[0:dataIndex])
-				respContent.Write(resp[0:readCount])
-				_, err = udpListener.WriteToUDP(respContent.Bytes(), remoteAddr)
-				if err != nil {
-					log.Println("Write UDP packet to client failed.")
-					return err
-				}
 			}
 		}
 	}
