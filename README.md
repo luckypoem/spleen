@@ -1,6 +1,6 @@
 # Spleen
 
-Spleen is a SOCKS5 server written in Golang, the server can handles both the TCP and UDP, it support `CONNECT` and `UDP ASSOCIATE` method.
+Spleen is a SOCKS5 server written in Golang, the server can handles the TCP that support `CONNECT` method.
 
 # How to use
 
@@ -14,3 +14,4 @@ Download the server binary from [release](https://github.com/Leviathan1995/splee
 # TODO
 * Optimize code
 * Support others command
+* Support UDP
