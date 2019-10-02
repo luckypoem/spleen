@@ -209,15 +209,14 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				dstAddr := &net.UDPAddr{IP: dstIP, Port: int(binary.BigEndian.Uint16(dstPort))}
 				conn, err := net.DialUDP("udp", srcAddr, dstAddr)
 				if err != nil {
-					return errors.New("Connect the destination server over UDP failed.")
+					return errors.New("Connect tUDP datagrams over UDP failed.")
 				}
-				defer conn.Close()
 
 				/* Server forward UDP datagrams to the destination address. */
 				/* TODO verify writeCount */
 				_, err = conn.Write(buf[dataIndex:readCount])
 				if err != nil {
-					return errors.New("Write UDP datagrams failed.")
+					return errors.New("Write UDP datagrams to UDP datagrams failed.")
 				}
 				log.Printf("Server send the UDP datagrams to %s:%d successed.", dstAddr.IP.String(), dstAddr.Port)
 
@@ -230,9 +229,10 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				respContent.Write(resp[0:readCount])
 				_, err = udpListener.WriteToUDP(respContent.Bytes(), remoteAddr)
 				if err != nil {
-					log.Println("Write UDP packet to client failed.")
+					log.Println("Write UDP datagrams to client failed.")
 					return err
 				}
+				conn.Close()
 			}
 		}
 	}
