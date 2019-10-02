@@ -168,13 +168,13 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 		buf := make([]byte, UDPBUFFERSIZE)
 		readCount, remoteAddr, err := udpListener.ReadFromUDP(buf)
 		if err != nil {
-			log.Printf("Read UDP data graram failed.")
+			log.Printf("Read UDP datagrams failed.")
 			return err
 		}
 		if readCount > 0 {
 			if buf[2] != 0x00 {
-				/* Discard fragment udp data package. */
-				return errors.New("Discard fragment UDP data garam.")
+				/* Discard fragment udp datagrams. */
+				return errors.New("Discard fragment UDP datagrams.")
 			}
 
 			var dstIP []byte
@@ -213,13 +213,13 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				}
 				defer conn.Close()
 
-				/* Server forward UDP data gram to the destination address. */
+				/* Server forward UDP datagrams to the destination address. */
 				/* TODO verify writeCount */
 				_, err = conn.Write(buf[dataIndex:readCount])
 				if err != nil {
-					return errors.New("Write UDP data garam failed.")
+					return errors.New("Write UDP datagrams failed.")
 				}
-				log.Printf("Server send the UDP data garam to %s:%d successed.", dstAddr.IP.String(), dstAddr.Port)
+				log.Printf("Server send the UDP datagrams to %s:%d successed.", dstAddr.IP.String(), dstAddr.Port)
 
 				resp := make([]byte, UDPBUFFERSIZE)
 				readCount, _ = conn.Read(resp)
