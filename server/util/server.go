@@ -41,7 +41,6 @@ func (s *server) Listen() error {
 		_ = userConn.SetLinger(0)
 		go s.handleTCPConn(userConn)
 	}
-
 }
 
 func (s *server) handleTCPConn(userConn *net.TCPConn) {
@@ -50,7 +49,6 @@ func (s *server) handleTCPConn(userConn *net.TCPConn) {
 isUDP:
 	dstAddr, errParse, isUDP := s.ParseSOCKS5(userConn)
 	if errParse == io.EOF {
-		log.Printf("Connection closed.")
 		return
 	}
 	if errParse != nil{

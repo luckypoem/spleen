@@ -113,7 +113,7 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 			var udpListener *net.UDPConn
 			var errListen error
 			for {
-				randomPort = rand.Int() % 1024
+				randomPort = 1024 + rand.Int() % 65535
 				udpListener, errListen = net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP(s.ServerIP), Port: randomPort})
 				if errListen != nil {
 					continue
@@ -132,9 +132,8 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 			}
 
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
-			s.HandleUDPData(udpListener, dstIP, cliPort)
+			go s.HandleUDPData(udpListener, dstIP, cliPort)
 			return &net.TCPAddr{}, nil, true
-
 		} else {
 			log.Println("Only support CONNECT and UDP ASSOCIATE method.")
 			return &net.TCPAddr{}, errRead, false
@@ -168,13 +167,14 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 		buf := make([]byte, UDPBUFFERSIZE)
 		readCount, remoteAddr, err := udpListener.ReadFromUDP(buf)
 		if err != nil {
-			log.Printf("Read UDP datagrams failed.")
-			return err
+			log.Printf("Read the UDP datagrams failed.")
+			continue
 		}
 		if readCount > 0 {
 			if buf[2] != 0x00 {
 				/* Discard fragment udp datagrams. */
-				return errors.New("Discard fragment UDP datagrams.")
+				log.Println("Discard fragment UDP datagrams.")
+				continue
 			}
 
 			var dstIP []byte
@@ -187,14 +187,16 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				domainLen := int(buf[5])
 				ipAddr, err := net.ResolveIPAddr("ip", string(buf[6:6+domainLen]))
 				if err != nil {
-					return errors.New("Parse UDP address failed.")
+					log.Println("Parse the UDP address failed.")
+					continue
 				}
 				dstIP = ipAddr.IP
 			case 0x04: /* IPV6 */
 				dstIP = buf[4 : 4+net.IPv6len]
 				dataIndex = 4 + net.IPv6len
 			default:
-				return errors.New("Wrong DST.ADDR and DST.PORT in UDP")
+				log.Println("Wrong DST.ADDR and DST.PORT in UDP")
+				continue
 			}
 
 			dstPort := buf[dataIndex : dataIndex+2]
@@ -209,16 +211,17 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				dstAddr := &net.UDPAddr{IP: dstIP, Port: int(binary.BigEndian.Uint16(dstPort))}
 				conn, err := net.DialUDP("udp", srcAddr, dstAddr)
 				if err != nil {
-					return errors.New("Connect tUDP datagrams over UDP failed.")
+					log.Println("Connect to the destination server failed.")
+					continue
 				}
 
 				/* Server forward UDP datagrams to the destination address. */
 				/* TODO verify writeCount */
 				_, err = conn.Write(buf[dataIndex:readCount])
 				if err != nil {
-					return errors.New("Write UDP datagrams to UDP datagrams failed.")
+					log.Println("Write UDP datagrams to UDP datagrams failed.")
+					continue
 				}
-				log.Printf("Server send the UDP datagrams to %s:%d successed.", dstAddr.IP.String(), dstAddr.Port)
 
 				resp := make([]byte, UDPBUFFERSIZE)
 				readCount, _ = conn.Read(resp)
@@ -229,8 +232,8 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 				respContent.Write(resp[0:readCount])
 				_, err = udpListener.WriteToUDP(respContent.Bytes(), remoteAddr)
 				if err != nil {
-					log.Println("Write UDP datagrams to client failed.")
-					return err
+					log.Println("Write the  UDP datagrams to client failed.")
+					continue
 				}
 				conn.Close()
 			}
