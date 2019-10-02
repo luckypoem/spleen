@@ -132,7 +132,7 @@ func (s *Service) ParseSOCKS5(userConn *net.TCPConn) (*net.TCPAddr, error, bool)
 			}
 
 			cliPort, _ := strconv.Atoi(string(buf[readCount-2 : readCount]))
-			go s.HandleUDPData(udpListener, dstIP, cliPort)
+			s.HandleUDPData(udpListener, dstIP, cliPort)
 			return &net.TCPAddr{}, nil, true
 
 		} else {
@@ -199,7 +199,7 @@ func (s *Service) HandleUDPData(udpListener *net.UDPConn, cliIP []byte, cliPort 
 
 			dstPort := buf[dataIndex : dataIndex+2]
 			dataIndex += 2
-			/* Verify the source address */
+			/* Verify the source address. */
 			sourceIP := remoteAddr.IP.String()
 			sourcePort := remoteAddr.Port
 
