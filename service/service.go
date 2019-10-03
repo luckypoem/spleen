@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
-  "net"
+	"net"
 )
 
 const BUFFERSIZE = 1024 * 4
