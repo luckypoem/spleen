@@ -16,3 +16,5 @@ archive:
         format: zip
   files:
     - .server.json
+    - spleen-server.service
+    - start.sh
