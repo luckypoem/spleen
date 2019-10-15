@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 
-	"github.com/spleen/server/util"
+	"github.com/luckypoem/spleen/server/util"
 )
 
 func main() {
