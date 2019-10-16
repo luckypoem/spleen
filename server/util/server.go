@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/spleen/service"
+	"github.com/luckypoem/spleen/service"
 )
 
 type server struct {
